@@ -1,26 +1,32 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from .models import Post, Category
-from .forms import PostForm
+from .models import Post, Category, Comment
+from .forms import PostForm, CommentForm
 from django.contrib import messages
 
 def home(request):
-    query = request.GET.get('q', '')
-    category_slug = request.GET.get('category', '')
-    posts = Post.objects.all().order_by('-created_at')
-
-    if query:
-        posts = posts.filter(Q(title__icontains=query) | Q(content__icontains=query))
-    if category_slug:
-        posts = posts.filter(category__slug=category_slug)
-
+    posts = Post.objects.all()
     categories = Category.objects.all()
-    return render(request, 'blog/home.html', {'posts': posts, 'categories': categories, 'query': query, 'category_slug': category_slug})
+    return render(request, 'blog/home.html', {'posts': posts, 'categories': categories})
 
 def detail(request, slug):
     post = get_object_or_404(Post, slug=slug)
-    return render(request, 'blog/detail.html', {'post': post})
+    comments = post.comments.all()
+    if request.method == 'POST':
+        if not request.user.is_authenticated:
+            messages.error(request, 'Please log in to comment.')
+            return redirect('accounts:login')
+        form = CommentForm(request.POST)
+        if form.is_valid():
+            comment = form.save(commit=False)
+            comment.post = post
+            comment.author = request.user
+            comment.save()
+            messages.success(request, 'Comment added successfully!')
+            return redirect('blog:detail', slug=slug)
+    else:
+        form = CommentForm()
+    return render(request, 'blog/detail.html', {'post': post, 'comments': comments, 'form': form})
 
 @login_required
 def create_post(request):
@@ -30,10 +36,14 @@ def create_post(request):
             post = form.save(commit=False)
             post.author = request.user
             post.save()
+            form.save_m2m()
             messages.success(request, 'Post created successfully!')
             return redirect('blog:detail', slug=post.slug)
-        else:
-            messages.error(request, 'Please correct the errors below.')
     else:
         form = PostForm()
     return render(request, 'blog/create.html', {'form': form})
+
+def category(request, slug):
+    category = get_object_or_404(Category, slug=slug)
+    posts = category.posts.all()
+    return render(request, 'blog/category.html', {'category': category, 'posts': posts})
