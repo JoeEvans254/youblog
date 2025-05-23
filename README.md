@@ -148,7 +148,6 @@ Only logged-in users can comment (optional moderation toggle).
 
 **Happy Blogging with YouBlog! 💙**
 
-```
 
----
+
 
